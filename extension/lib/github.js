@@ -146,12 +146,21 @@
       return data && data.state ? data.state : 'missing';
     }
 
-    dispatch(workflow, inputs, ref) {
+    /** ענף ברירת המחדל של המאגר. GitHub דורש ref מפורש בהפעלת Workflow. */
+    async defaultBranch() {
+      if (this._defaultBranch) return this._defaultBranch;
+      const info = await this.repoInfo();
+      this._defaultBranch = info.default_branch || 'main';
+      return this._defaultBranch;
+    }
+
+    async dispatch(workflow, inputs, ref) {
       this.requireRepo();
+      const branch = ref || (await this.defaultBranch());
       return this.request(
         'POST',
         `/repos/${this.repo}/actions/workflows/${workflow}/dispatches`,
-        { ref: ref || undefined, inputs: inputs || {} },
+        { ref: branch, inputs: inputs || {} },
         { expect: [204] }
       );
     }

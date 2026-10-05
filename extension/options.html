@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>הגדרות – הורדות מהמייל</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="options">
+  <header>
+    <h1>⚙️ הגדרות ההורדות</h1>
+    <span class="pill" id="statePill">טוען…</span>
+  </header>
+
+  <main>
+    <div id="alertBox"></div>
+
+    <div class="card">
+      <h2>חיבור ל-GitHub</h2>
+      <p class="hint">
+        הטוקן כבר מוטמע בתוסף (<code>lib/config.js</code>). אפשר לעקוף אותו כאן בלי לערוך קוד.
+        הטוקן צריך הרשאות <code>Contents</code>, <code>Actions</code>, <code>Secrets</code> ו-<code>Variables</code> – כולן Read and write.
+      </p>
+      <div class="row">
+        <div>
+          <label for="tokenInput">טוקן GitHub (ריק = משתמש בטוקן המוטמע)</label>
+          <input type="password" id="tokenInput" dir="ltr" placeholder="ghp_…" autocomplete="off">
+        </div>
+        <div>
+          <label for="repoInput">מאגר (owner/repo)</label>
+          <input type="text" id="repoInput" dir="ltr" placeholder="username/video-mail-downloader">
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label for="workflowInput">קובץ ה-Workflow</label>
+          <input type="text" id="workflowInput" dir="ltr" placeholder="downloader.yml">
+        </div>
+        <div>
+          <label for="cookiesSecretInput">שם ה-Secret של העוגיות</label>
+          <input type="text" id="cookiesSecretInput" dir="ltr" placeholder="YT_COOKIES_B64">
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="saveConnectionBtn">שמור</button>
+        <button class="btn ghost" id="testConnectionBtn">בדוק חיבור</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>ברירות מחדל להורדה</h2>
+      <div class="row">
+        <div>
+          <label for="qualitySelect">איכות</label>
+          <select id="qualitySelect"></select>
+        </div>
+        <div>
+          <label for="targetSelect">יעד העלאה</label>
+          <select id="targetSelect"></select>
+        </div>
+      </div>
+      <label class="switch" style="display:flex;gap:8px;align-items:center;margin-top:12px">
+        <input type="checkbox" id="googleCookiesChk"> לכלול עוגיות של google.com (נדרש לפעמים ליוטיוב)
+      </label>
+      <div class="actions">
+        <button class="btn" id="saveDefaultsBtn">שמור ברירות מחדל</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>עוגיות יוטיוב</h2>
+      <p class="hint">
+        העוגיות נשלחות מוצפנות כ-Secret (<span id="secretNameSpan">YT_COOKIES_B64</span>) ומשמשות את
+        ההורדה בענן. בלי זה, סרטונים פרטיים או מוגבלי גיל לא יירדו.
+      </p>
+      <div class="tiny muted" id="cookieInfo">—</div>
+      <div class="actions">
+        <button class="btn" id="sendCookiesBtn">שלח עוגיות מהדפדפן ל-Secret</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>מי מורשה לבקש הורדות (רשימה לבנה)</h2>
+      <p class="hint">
+        נשמר במאגר ב-<code>whitelist.json</code> ומשמש את תהליך המייל. אפשר גם דומיין שלם, למשל <code>@example.com</code>.
+      </p>
+      <label style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" id="allowAllChk"> לאשר את כולם
+      </label>
+      <div style="overflow-x:auto;margin-top:10px">
+        <table id="wlTable">
+          <thead><tr><th>כתובת מייל</th><th>שם</th><th style="width:70px">פעיל</th><th style="width:60px"></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button class="btn ghost sm" id="wlAddBtn">+ הוסף כתובת</button>
+        <button class="btn" id="wlSaveBtn">שמור במאגר</button>
+        <button class="btn ghost" id="reloadBtn">טען מחדש מהמאגר</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>הגדרות תהליך ההורדה</h2>
+      <p class="hint">נשמר ב-<code>config.json</code> שבמאגר.</p>
+      <div class="row">
+        <div>
+          <label for="keywordsInput">מילות מפתח לנושא (מופרד בפסיק)</label>
+          <input type="text" id="keywordsInput" placeholder="הורדה, download">
+        </div>
+        <div>
+          <label for="maxSizeInput">גודל מקסימלי (MB)</label>
+          <input type="number" id="maxSizeInput" min="1" placeholder="1900">
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label for="maxLinksInput">מקסימום קישורים למייל</label>
+          <input type="number" id="maxLinksInput" min="1" placeholder="3">
+        </div>
+        <div>
+          <label for="localScanInput">כמה הודעות לסרוק בכל בדיקה</label>
+          <input type="number" id="localScanInput" min="1" placeholder="50">
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="notifyFailChk"> לשלוח מייל כשההורדה נכשלת</label>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="notifyUnauthChk"> לשלוח מייל למי שאינו מורשה</label>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="playlistsChk"> לאפשר פלייליסטים</label>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="asciiChk"> שמות קבצים באנגלית בלבד</label>
+      </div>
+      <div class="actions">
+        <button class="btn" id="cfgSaveBtn">שמור במאגר</button>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="lib/vendor/nacl-fast.min.js"></script>
+  <script src="lib/vendor/blake2b.js"></script>
+  <script src="lib/config.js"></script>
+  <script src="lib/sealedbox.js"></script>
+  <script src="lib/github.js"></script>
+  <script src="lib/cookies.js"></script>
+  <script src="lib/quality.js"></script>
+  <script src="lib/util.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

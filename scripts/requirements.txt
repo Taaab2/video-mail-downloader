@@ -1,0 +1,4 @@
+yt-dlp>=2024.10.7
+requests>=2.31.0
+# נדרש רק אם משתמשים בהעלאה ל-Google Drive
+google-auth>=2.30.0

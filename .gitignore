@@ -1,0 +1,26 @@
+# סודות והגדרות מקומיות
+.env
+admin/.env
+*.local.json
+
+# הטוקן המוטמע בתוסף – נשאר במחשב בלבד (במאגר יש config.example.js)
+extension/lib/config.js
+
+# סביבות פייתון
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# קבצים זמניים של הורדות ולוגים
+downloads/
+tmp/
+*.log
+admin/.trash/
+
+# קבצי הסביבה של הכלי
+.freebuff/
+
+# מערכות
+.DS_Store
+Thumbs.db

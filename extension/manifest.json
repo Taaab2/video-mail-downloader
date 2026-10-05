@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "הורדות מהמייל – לוח בקרה",
+  "version": "1.0.0",
+  "description": "שולח עוגיות יוטיוב ל-Secret ב-GitHub ומפעיל הורדת סרטונים באיכות שתבחר, עם קישור ישיר בתום ההורדה.",
+  "default_locale": "he",
+  "permissions": ["cookies", "storage", "tabs", "activeTab"],
+  "host_permissions": [
+    "https://api.github.com/*",
+    "https://github.com/*",
+    "https://*.youtube.com/*",
+    "https://*.google.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "הורדות מהמייל"
+  },
+  "options_page": "options.html"
+}

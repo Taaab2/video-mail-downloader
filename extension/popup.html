@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>הורדות מהמייל</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="popup">
+  <header>
+    <h1>📥 הורדות</h1>
+    <span class="pill" id="repoPill">טוען…</span>
+    <a class="link tiny" id="openOptions" href="options.html">הגדרות</a>
+  </header>
+
+  <main>
+    <div id="alertBox"></div>
+
+    <div class="card">
+      <h2>הורדה עכשיו</h2>
+      <label for="urlInput">קישור לסרטון</label>
+      <input type="text" id="urlInput" dir="ltr" placeholder="https://www.youtube.com/watch?v=...">
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label for="qualitySelect">איכות</label>
+          <select id="qualitySelect"></select>
+        </div>
+        <div>
+          <label for="targetSelect">לאן להעלות</label>
+          <select id="targetSelect"></select>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="downloadBtn">הורד</button>
+        <button class="btn ghost" id="useTabBtn">קח מהלשונית הפתוחה</button>
+        <span class="pill" id="runPill" style="display:none"></span>
+      </div>
+      <div id="resultBox"></div>
+    </div>
+
+    <div class="card">
+      <h2>עוגיות יוטיוב</h2>
+      <p class="hint">
+        נדרש רק לסרטונים שדורשים התחברות (פרטיים, מוגבלי גיל). העוגיות נשלחות מוצפנות
+        ל-Secret במאגר GitHub ואינן נשמרות בתוסף.
+      </p>
+      <div class="tiny muted" id="cookieInfo">בודק…</div>
+      <div class="actions">
+        <button class="btn" id="cookieBtn">שלח עוגיות ל-Secret</button>
+        <button class="btn ghost sm" id="cookieCheckBtn">בדוק מצב</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>ההורדות האחרונות</h2>
+      <div id="releasesBox" class="tiny muted">טוען…</div>
+      <div class="actions">
+        <button class="btn ghost sm" id="refreshReleasesBtn">רענן</button>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- ספריות מקומיות (אין קוד מרוחק – דרישת Chrome) -->
+  <script src="lib/vendor/nacl-fast.min.js"></script>
+  <script src="lib/vendor/blake2b.js"></script>
+  <!-- config.js מכיל את הטוקן המוטמע והוא לא נכנס ל-Git -->
+  <script src="lib/config.js"></script>
+  <script src="lib/sealedbox.js"></script>
+  <script src="lib/github.js"></script>
+  <script src="lib/cookies.js"></script>
+  <script src="lib/quality.js"></script>
+  <script src="lib/util.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

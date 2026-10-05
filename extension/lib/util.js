@@ -12,14 +12,31 @@
     INCLUDE_GOOGLE_COOKIES: true,
   };
 
-  const KEYS = Object.keys(FALLBACK).concat(['LAST_RUN_ID', 'COOKIE_INFO']);
+  const KEYS = Object.keys(FALLBACK).concat(['BEFORE_RUN_ID', 'PENDING', 'COOKIE_INFO']);
 
-  const hasExtensionStorage =
-    typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+  /* חשוב: להסתכל על chrome.runtime.id – רק בהקשר תוסף אמיתי.
+     בדף רגיל ב-Chromium קיים אובייקט chrome בלי API פעיל, ואז הקולבק לא חוזר. */
+  const inExtension = typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
+  const hasExtensionStorage = inExtension && !!chrome.storage && !!chrome.storage.local;
 
   function storageGet(keys) {
     if (hasExtensionStorage) {
-      return new Promise((resolve) => chrome.storage.local.get(keys, (v) => resolve(v || {})));
+      return new Promise((resolve) => {
+        let done = false;
+        const finish = (value) => {
+          if (!done) {
+            done = true;
+            resolve(value || {});
+          }
+        };
+        try {
+          chrome.storage.local.get(keys, finish);
+        } catch (err) {
+          finish(null);
+        }
+        // רשת ביטחון: אם הקולבק לא חוזר, ממשיכים עם ברירות המחדל
+        setTimeout(() => finish(null), 1500);
+      });
     }
     const out = {};
     for (const key of keys) {
@@ -37,7 +54,21 @@
 
   function storageSet(values) {
     if (hasExtensionStorage) {
-      return new Promise((resolve) => chrome.storage.local.set(values, resolve));
+      return new Promise((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (!done) {
+            done = true;
+            resolve();
+          }
+        };
+        try {
+          chrome.storage.local.set(values, finish);
+        } catch (err) {
+          finish();
+        }
+        setTimeout(finish, 1500);
+      });
     }
     for (const [key, value] of Object.entries(values)) {
       localStorage.setItem('dl.' + key, JSON.stringify(value));
@@ -66,8 +97,20 @@
   }
 
   // ------------------------------------------------------------------ //
-  const $ = (sel, scope) => (scope || document).querySelector(sel);
-  const $$ = (sel, scope) => Array.from((scope || document).querySelectorAll(sel));
+  /* $ תומך גם במזהה חשוף ('saveBtn') וגם בסלקטור ('#tab .btn').
+     מזהה חשוף הולך ל-getElementById כדי שלא יתפרש כשם תג. */
+  function $(sel, scope) {
+    const root = scope || document;
+    const s = String(sel);
+    if (root === document && /^[A-Za-z][\w-]*$/.test(s)) {
+      return document.getElementById(s) || document.querySelector(s);
+    }
+    return root.querySelector(s);
+  }
+
+  function $$(sel, scope) {
+    return Array.from((scope || document).querySelectorAll(sel));
+  }
 
   function esc(value) {
     return String(value == null ? '' : value)
@@ -141,6 +184,8 @@
     loadSettings,
     saveSettings,
     client,
+    inExtension,
+    hasExtensionStorage,
     $,
     $$,
     esc,

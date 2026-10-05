@@ -104,6 +104,13 @@
     setRunPill('busy', 'שולח…');
     $('downloadBtn').disabled = true;
     try {
+      // זוכרים איזו הרצה הייתה האחרונה, כדי לא להתבלבל איתה כשהחדשה עוד לא הופיעה
+      const before = await gh.listRuns(settings.WORKFLOW, 1).catch(() => []);
+      const beforeId = before.length ? before[0].id : null;
+      await u.saveSettings({ BEFORE_RUN_ID: beforeId, PENDING: true });
+      settings.BEFORE_RUN_ID = beforeId;
+      settings.PENDING = true;
+
       await gh.dispatch(settings.WORKFLOW, {
         url,
         quality,
@@ -113,9 +120,11 @@
       });
       toast('ההרצה נשלחה ל-GitHub');
       setRunPill('busy', 'ממתין להתחלה…');
-      await new Promise((r) => setTimeout(r, 4000));
+      startPolling();
       await pollRuns(true);
     } catch (err) {
+      await u.saveSettings({ PENDING: false });
+      settings.PENDING = false;
       setRunPill('bad', 'שגיאה');
       toast(err.message, true);
       $('downloadBtn').disabled = false;
@@ -146,10 +155,12 @@
       return;
     }
     const run = runs[0];
-    const stored = settings.LAST_RUN_ID;
-    if (!stored) {
-      settings.LAST_RUN_ID = run.id;
-      u.saveSettings({ LAST_RUN_ID: run.id });
+
+    // ממתינים שההרצה שהפעלנו תופיע ברשימה, ולא מתייחסים להרצה קודמת
+    if (settings.PENDING && settings.BEFORE_RUN_ID && run.id === settings.BEFORE_RUN_ID) {
+      setRunPill('busy', 'ממתין להתחלה…');
+      startPolling();
+      return;
     }
 
     if (run.status !== 'completed') {
@@ -163,6 +174,8 @@
 
     stopPolling();
     $('downloadBtn').disabled = false;
+    settings.PENDING = false;
+    u.saveSettings({ PENDING: false });
     if (run.conclusion === 'success') {
       setRunPill('good', 'הסתיים ✓');
       await showLatestDownload(run);

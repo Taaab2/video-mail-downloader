@@ -130,7 +130,11 @@ python scripts/process_inbox.py --check          # בדיקת הגדרות, IMAP
 python scripts/process_inbox.py --dry-run        # סריקת תיבת הדואר בלי הורדה/העלאה/שליחה
 python scripts/process_inbox.py --eml mail.eml   # בדיקת קובץ מייל שמור
 python tests/test_parsing.py                     # בדיקות פענוח (48 בדיקות)
-node extension/dev/tests.js                      # בדיקות התוסף (24 בדיקות)
+node extension/dev/tests.js                      # בדיקות התוסף (22 בדיקות)
+node extension/dev/tests.js --live               # + כתיבת Secret אמיתי ל-GitHub
+
+# בדיקת קצה-לקצה: מפעיל הרצה אמיתית דרך לקוח התוסף וממתין לקישור
+GITHUB_TOKEN=… GITHUB_REPO=owner/repo node extension/dev/e2e-live.js "https://youtu.be/XXXX" 720p
 ```
 
 ---

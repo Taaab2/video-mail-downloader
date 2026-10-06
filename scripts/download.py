@@ -69,6 +69,9 @@ DEFAULTS: dict = {
     "merge_output_format": "mp4",
     "allow_playlists": False,
     "js_runtimes": [],
+    # רכיבים מרוחקים של yt-dlp: "ejs:github" מוריד את פותר ה-JS של YouTube
+    # (נדרש כדי לפתור את אתגר ה-n). בלעדיו סרטוני יוטיוב נכשלים ב-"הדף צריך רענון".
+    "remote_components": ["ejs:github"],
     "ascii_filenames": False,
     "release_tag_prefix": "dl",
     # כמה שעות לשמור Release לפני שהניקוי היומי מוחק אותו (0 = לעולם)
@@ -201,6 +204,11 @@ class Downloader:
         runtimes = self.cfg.get("js_runtimes") or []
         if runtimes:
             opts["js_runtimes"] = {str(name): {} for name in runtimes}
+        components = self.cfg.get("remote_components")
+        if components is None:
+            components = ["ejs:github"]
+        if components:
+            opts["remote_components"] = [str(name) for name in components]
         if self.cookiefile:
             opts["cookiefile"] = str(self.cookiefile)
         if preset.get("audio_only"):

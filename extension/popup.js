@@ -220,7 +220,7 @@
         <tr>
           <td>${u.esc(a.name)}<br><span class="tiny muted">${u.esc(u.humanSize(a.size))}</span></td>
           <td style="width:230px;white-space:nowrap">
-            <button class="btn sm" data-token-dl="${a.id != null ? a.id : ''}" data-name="${u.esc(a.name)}">הורדה מאובטחת</button>
+            <button class="btn sm" data-token-dl="${a.id != null ? a.id : ''}" data-name="${u.esc(a.name)}" data-url="${u.esc(a.url)}">הורדה מאובטחת</button>
             <button class="btn ghost sm" data-copy="${u.esc(a.url)}">קישור ישיר</button>
           </td>
         </tr>`).join('');
@@ -258,6 +258,7 @@
       el.addEventListener('click', async () => {
         const id = el.getAttribute('data-token-dl');
         const name = el.getAttribute('data-name');
+        const directUrl = el.getAttribute('data-url');
         el.disabled = true;
         const label = el.textContent;
         el.textContent = 'מוריד…';
@@ -265,7 +266,12 @@
           await gh.downloadAsset(id, name);
           toast('ההורדה החלה ✓');
         } catch (err) {
-          toast(err.message, true);
+          // נפילה חיננית: אם ההורדה עם הטוקן לא זמינה בדפדפן הזה – לוקחים את הקישור הישיר
+          if (directUrl) {
+            u.copyText(directUrl, 'הקישור הישיר (ההורדה המאובטחת לא זמינה כאן)');
+          } else {
+            toast(err.message, true);
+          }
         } finally {
           el.disabled = false;
           el.textContent = label;
@@ -381,7 +387,7 @@
             <tr>
               <td>${u.esc(a.name)}<br><span class="tiny muted">${u.esc(u.humanSize(a.size))}</span></td>
               <td style="width:210px;white-space:nowrap">
-                <button class="btn sm" data-token-dl="${a.id != null ? a.id : ''}" data-name="${u.esc(a.name)}">הורדה מאובטחת</button>
+                <button class="btn sm" data-token-dl="${a.id != null ? a.id : ''}" data-name="${u.esc(a.name)}" data-url="${u.esc(a.url)}">הורדה מאובטחת</button>
                 <button class="btn ghost sm" data-copy="${u.esc(a.url)}">קישור ישיר</button>
               </td>
             </tr>`).join('')}</table>

@@ -10,7 +10,7 @@
   const GOOGLE_DOMAINS = ['https://www.google.com', 'https://accounts.google.com'];
   const HEADER = [
     '# Netscape HTTP Cookie File',
-    '# נוצר על ידי תוסף "הורדות מהמייל" – לשימוש yt-dlp בלבד',
+    '# נוצר על ידי תוסף "הורדות סרטונים" – לשימוש yt-dlp בלבד',
     '',
   ].join('\n');
 

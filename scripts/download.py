@@ -265,12 +265,14 @@ class _YdlLogger:
 # אריזה כ-ZIP
 # --------------------------------------------------------------------------- #
 def zip_files(files: list[Path], workdir: Path) -> Path:
-    """אורז את הקבצים שהורדו לקובץ ZIP אחד. תמיד מחזיר קובץ .zip."""
-    if len(files) == 1:
-        base = files[0].stem
-    else:
-        base = "download"
-    base = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", base).strip() or "download"
+    """אורז את הקבצים שהורדו לקובץ ZIP אחד, ששמו כשם הסרטון שבתוכו.
+
+    שם הקובץ נגזר מהקובץ הגדול ביותר (הסרטון/האודיו עצמו), כך שהזיפ תמיד
+    נקרא כמו הסרטון – גם אם להורדה התלווים קבצים נוספים.
+    """
+    video = max(files, key=lambda p: p.stat().st_size)
+    base = video.stem
+    base = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", base).strip() or "video"
     archive_path = workdir / f"{base}.zip"
     index = 1
     while archive_path.exists():
@@ -332,10 +334,14 @@ def download_url(url: str, cfg: dict, args, uploader: ReleaseUploader | None,
                 f"הורדה {datetime.now(timezone.utc):%Y-%m-%d %H:%M}",
                 f"הורדה של {url}",
             )
-            asset = uploader.upload_asset(release, archive)
-            log_notice(f"הועלה ל-GitHub: {asset['name']} ({human_size(size)})")
+            # ה-label נושא את שם הסרטון המקורי (עברית נשמרת), גם אם שם האסימון
+            # עצמו מומר ל-ASCII על ידי GitHub.
+            asset = uploader.upload_asset(release, archive, label=archive.name)
+            log_notice(
+                f"הועלה ל-GitHub: {asset['name']} · שם מלא: {archive.name} ({human_size(size)})"
+            )
             result["ok"] = True
-            result["asset_name"] = asset["name"]
+            result["asset_name"] = archive.name
             result["release_url"] = release.get("html_url")
             result["download_url"] = (
                 asset.get("browser_download_url") or ReleaseUploader.direct_url(REPO, tag, asset["name"])

@@ -208,6 +208,7 @@
         assets: (rel.assets || []).map((a) => ({
           id: a.id,
           name: a.name,
+          label: a.label || '',
           size: a.size,
           downloads: a.download_count,
           url: a.browser_download_url,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import requests
@@ -72,13 +73,19 @@ class ReleaseUploader:
             raise ReleaseError(f"יצירת Release נכשלה ({resp.status_code}): {resp.text[:400]}")
         return resp.json()
 
-    def upload_asset(self, release: dict, path: Path, asset_name: str | None = None) -> dict:
+    def upload_asset(self, release: dict, path: Path, asset_name: str | None = None,
+                     label: str | None = None) -> dict:
+        # GitHub הופך כל תו שאינו ASCII לשם אסימון מקוצר, ולכן שומרים את השם
+        # המקורי (עברית וכו') ב-label – שם שמוצג ב-UI ובממשקי ה-API.
         asset_name = self._safe_asset_name(asset_name or path.name)
+        params = {"name": asset_name}
+        if label:
+            params["label"] = label[:200]
         upload_url = release["upload_url"].split("{")[0]
         with path.open("rb") as fh:
             resp = self.session.post(
                 upload_url,
-                params={"name": asset_name},
+                params=params,
                 data=fh,
                 headers={"Content-Type": "application/octet-stream"},
                 timeout=UPLOAD_TIMEOUT,
@@ -92,9 +99,16 @@ class ReleaseUploader:
 
     @staticmethod
     def _safe_asset_name(name: str) -> str:
-        name = name.replace("/", "-").replace("\\", "-").strip()
-        name = "".join(ch for ch in name if ch >= " " and ch not in '"*:<>?|')
-        return name[:180] or "video.mp4"
+        """שם אסימון בטוח ל-URL: ASCII בלבד, בלי תווים אסורים (כמו GitHub עושה)."""
+        name = name.replace("/", "-").replace("\\", "-")
+        suffix = Path(name).suffix
+        if not re.fullmatch(r"\.[A-Za-z0-9]{1,5}", suffix or ""):
+            suffix = ""
+        stem = name[: len(name) - len(suffix)] if suffix else name
+        ascii_stem = stem.encode("ascii", "ignore").decode("ascii")
+        ascii_stem = re.sub(r"[^A-Za-z0-9._-]+", ".", ascii_stem)
+        ascii_stem = re.sub(r"\.{2,}", ".", ascii_stem).strip("._- ")
+        return (ascii_stem[: 180 - len(suffix)] or "video") + suffix
 
     @staticmethod
     def direct_url(repo: str, tag: str, asset_name: str) -> str:

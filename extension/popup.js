@@ -123,12 +123,16 @@
 
     busy = true;
     $('downloadBtn').disabled = true;
+    // תמיד שולחים עוגיות טריות ל-GitHub לפני ההורדה – בלי שהמשתמש צריך
+    // ללחוץ על שום כפתור. אם אין עוגיות או שיש שגיאה – ממשיכים בכל זאת.
     setRunPill('busy', 'מרענן עוגיות…');
     try {
-      // 1) עוגיות טריות וחמות – בכל הורדה, לפני שמפעילים את ההרצה
-      await refreshCookies(false);
+      const cookieStatus = await refreshCookies(false);
+      if (cookieStatus === 'error') {
+        toast('רענון העוגיות נכשל – ממשיך בכל זאת', true);
+      }
 
-      // 2) מפעילים את ההורדה
+      // מפעילים את ההורדה
       setRunPill('busy', 'שולח…');
       const before = await gh.listRuns(settings.WORKFLOW, 1).catch(() => []);
       const beforeId = before.length ? before[0].id : null;
@@ -218,9 +222,9 @@
       }
       const rows = latest.assets.map((a) => `
         <tr>
-          <td>${u.esc(a.name)}<br><span class="tiny muted">${u.esc(u.humanSize(a.size))}</span></td>
+          <td>${u.esc(a.label || a.name)}<br><span class="tiny muted">${u.esc(u.humanSize(a.size))}</span></td>
           <td style="width:230px;white-space:nowrap">
-            <button class="btn sm" data-token-dl="${a.id != null ? a.id : ''}" data-name="${u.esc(a.name)}" data-url="${u.esc(a.url)}">הורדה מאובטחת</button>
+            <button class="btn sm" data-token-dl="${a.id != null ? a.id : ''}" data-name="${u.esc(a.label || a.name)}" data-url="${u.esc(a.url)}">הורדה מאובטחת</button>
             <button class="btn ghost sm" data-copy="${u.esc(a.url)}">קישור ישיר</button>
           </td>
         </tr>`).join('');
@@ -283,17 +287,20 @@
   // ------------------------------------------------------------------ //
   // עוגיות
   // ------------------------------------------------------------------ //
-  /** אוסף עוגיות יוטיוב מהדפדפן ושולח אותן ל-Secret. מחזיר true אם נשלחו. */
+  /**
+   * אוסף עוגיות יוטיוב טריות מהדפדפן ושולח אותן ל-Secret.
+   * נקרא אוטומטית לפני כל הורדה. מחזיר 'ok' | 'empty' | 'error' | 'noconn'.
+   */
   async function refreshCookies(verbose) {
     if (!settings.TOKEN || !settings.REPO) {
       if (verbose) toast('קודם הגדירו טוקן ומאגר', true);
-      return false;
+      return 'noconn';
     }
     try {
       const cookies = await window.ytCookies.collect(settings.INCLUDE_GOOGLE_COOKIES);
       if (!cookies.length) {
         if (verbose) toast('לא נמצאו עוגיות של יוטיוב בדפדפן', true);
-        return false;
+        return 'empty';
       }
       const text = window.ytCookies.toNetscape(cookies);
       const packed = await window.ytCookies.packForSecret(text);
@@ -310,10 +317,10 @@
       await u.saveSettings({ COOKIE_INFO: info });
       renderCookieInfo(info, true);
       if (verbose) toast('העוגיות רועננו ונשלחו ✓');
-      return true;
+      return 'ok';
     } catch (err) {
       if (verbose) toast('רענון העוגיות נכשל: ' + err.message, true);
-      return false;
+      return 'error';
     }
   }
 
@@ -385,9 +392,9 @@
           <div class="tiny muted">${u.esc(u.fmtDate(rel.created_at))}</div>
           <table>${rel.assets.map((a) => `
             <tr>
-              <td>${u.esc(a.name)}<br><span class="tiny muted">${u.esc(u.humanSize(a.size))}</span></td>
+              <td>${u.esc(a.label || a.name)}<br><span class="tiny muted">${u.esc(u.humanSize(a.size))}</span></td>
               <td style="width:210px;white-space:nowrap">
-                <button class="btn sm" data-token-dl="${a.id != null ? a.id : ''}" data-name="${u.esc(a.name)}" data-url="${u.esc(a.url)}">הורדה מאובטחת</button>
+                <button class="btn sm" data-token-dl="${a.id != null ? a.id : ''}" data-name="${u.esc(a.label || a.name)}" data-url="${u.esc(a.url)}">הורדה מאובטחת</button>
                 <button class="btn ghost sm" data-copy="${u.esc(a.url)}">קישור ישיר</button>
               </td>
             </tr>`).join('')}</table>

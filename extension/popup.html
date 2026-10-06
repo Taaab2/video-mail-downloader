@@ -2,12 +2,13 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <title>הורדות מהמייל</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>הורדות סרטונים</title>
   <link rel="stylesheet" href="ui.css">
 </head>
-<body class="popup">
+<body class="options">
   <header>
-    <h1>📥 הורדות</h1>
+    <h1>📥 הורדות סרטונים</h1>
     <span class="pill" id="repoPill">טוען…</span>
     <a class="link tiny" id="openOptions" href="options.html">הגדרות</a>
   </header>
@@ -18,15 +19,14 @@
     <div class="card">
       <h2>הורדה עכשיו</h2>
       <label for="urlInput">קישור לסרטון</label>
-      <input type="text" id="urlInput" dir="ltr" placeholder="https://www.youtube.com/watch?v=...">
+      <div class="input-row">
+        <input type="text" id="urlInput" dir="ltr" placeholder="https://www.youtube.com/watch?v=...">
+        <button type="button" class="btn ghost sm" id="pasteBtn" title="הדבק מהלוח">📋 הדבק</button>
+      </div>
       <div class="row" style="margin-top:10px">
         <div>
           <label for="qualitySelect">איכות</label>
           <select id="qualitySelect"></select>
-        </div>
-        <div>
-          <label for="targetSelect">לאן להעלות</label>
-          <select id="targetSelect"></select>
         </div>
       </div>
       <div class="actions">
@@ -40,12 +40,12 @@
     <div class="card">
       <h2>עוגיות יוטיוב</h2>
       <p class="hint">
-        נדרש רק לסרטונים שדורשים התחברות (פרטיים, מוגבלי גיל). העוגיות נשלחות מוצפנות
+        העוגיות נשלחות אוטומטית ומעודכנות בכל הורדה (עוגיות טריות). הן נשלחות מוצפנות
         ל-Secret במאגר GitHub ואינן נשמרות בתוסף.
       </p>
       <div class="tiny muted" id="cookieInfo">בודק…</div>
       <div class="actions">
-        <button class="btn" id="cookieBtn">שלח עוגיות ל-Secret</button>
+        <button class="btn ghost sm" id="cookieBtn">רענן עוגיות עכשיו</button>
         <button class="btn ghost sm" id="cookieCheckBtn">בדוק מצב</button>
       </div>
     </div>

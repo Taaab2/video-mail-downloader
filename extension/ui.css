@@ -41,6 +41,9 @@ input[type=text], input[type=password], input[type=number], select, textarea {
 }
 textarea { font-family: Consolas, monospace; font-size: 12px; direction: ltr; text-align: left; }
 input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
+.input-row { display: flex; gap: 8px; align-items: center; }
+.input-row input { flex: 1; }
+.input-row button { flex: 0 0 auto; white-space: nowrap; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .row > div { flex: 1; min-width: 120px; }
 button.btn {

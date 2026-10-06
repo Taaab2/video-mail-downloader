@@ -1,22 +1,10 @@
 {
-  "subject_keywords": ["הורדה", "download"],
-  "link_sources": ["subject", "body"],
-  "upload_target": "github",
-  "drive_folder_id": "",
-  "whitelist_file": "whitelist.json",
-  "downloads_folder": "Downloaded",
-  "failed_folder": "Downloads-Failed",
-  "max_links_per_email": 3,
-  "local_scan_limit": 50,
-  "max_file_size_mb": 1900,
   "video_format": "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
   "merge_output_format": "mp4",
   "allow_playlists": false,
   "js_runtimes": [],
-  "notify_unauthorized": false,
-  "notify_on_failure": true,
-  "reply_subject_prefix": "ההורדה שלך מוכנה",
-  "reply_footer": "הקישור הוא קישור הורדה ישיר. אם הקישור לא נפתח, נסו להעתיק אותו לדפדפן.",
+  "max_file_size_mb": 1900,
+  "ascii_filenames": false,
   "release_tag_prefix": "dl",
-  "ascii_filenames": false
+  "delete_releases_after_hours": 24
 }

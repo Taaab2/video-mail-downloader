@@ -1,6 +1,5 @@
 # סודות והגדרות מקומיות
 .env
-admin/.env
 *.local.json
 
 # הטוקן המוטמע בתוסף – נשאר במחשב בלבד (במאגר יש config.example.js)
@@ -16,9 +15,8 @@ __pycache__/
 downloads/
 tmp/
 *.log
-admin/.trash/
 
-# קבצי הסביבה של הכלי
+# כלי הפיתוח
 .freebuff/
 
 # מערכות

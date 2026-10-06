@@ -1,14 +1,13 @@
-name: הורדת סרטונים מהמייל
+name: הורדת סרטונים
 
-# רץ אוטומטית כל 10 דקות (GitHub מרשה מינימום 5 דקות, ולפעמים יש עיכוב בהרצות מתוזמנות),
-# וגם ידנית מהממשק המקומי או מלשונית Actions באתר GitHub.
+# שתי הרצות:
+#   1. הורדה – מופעלת ידנית מהתוסף (או מהאתר) עם קישור ואיכות.
+#   2. ניקוי – פעם ביום מוחק הורדות (Releases) בנות יותר מ-24 שעות.
 on:
-  schedule:
-    - cron: "*/10 * * * *"
   workflow_dispatch:
     inputs:
       url:
-        description: "קישור לסרטון (מילוי = הורדה ישירה של הקישור הזה, בלי תיבת דואר)"
+        description: "קישור לסרטון"
         type: string
         default: ""
       quality:
@@ -16,45 +15,30 @@ on:
         type: choice
         default: best
         options: [best, 1080p, 720p, 480p, 360p, audio]
-      target:
-        description: "לאן להעלות את הסרטון"
-        type: choice
-        default: github
-        options: [github, drive, both]
-      dry_run:
-        description: "מצב בדיקה – לא מוריד, לא מעלה ולא שולח מייל"
+      cleanup:
+        description: "לנקות הורדות ישנות בלבד (בלי להוריד סרטון)"
         type: boolean
         default: false
-      max_messages:
-        description: "מקסימום הודעות לעיבוד בהרצה הזו (0 = ללא הגבלה)"
-        type: string
-        default: "0"
+  schedule:
+    - cron: "0 3 * * *" # ניקוי יומי בשעה 03:00 UTC
 
 permissions:
-  contents: write # נדרש ליצירת Releases והעלאת קבצים
+  contents: write # נדרש ליצירת Releases, העלאת קבצים ומחיקתם
 
 concurrency:
-  group: inbox-downloader
+  group: downloader
   cancel-in-progress: false
 
 jobs:
-  process-inbox:
+  download:
+    name: הורדה
+    if: github.event_name == 'workflow_dispatch' && inputs.url != ''
     runs-on: ubuntu-latest
     timeout-minutes: 350
 
     env:
-      MAIL_USER: ${{ secrets.MAIL_USER }}
-      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
-      MAIL_FROM: ${{ vars.MAIL_FROM || secrets.MAIL_USER }}
-      IMAP_HOST: ${{ vars.IMAP_HOST || 'imap.gmail.com' }}
-      IMAP_PORT: ${{ vars.IMAP_PORT || '993' }}
-      SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
-      SMTP_PORT: ${{ vars.SMTP_PORT || '465' }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # אופציונלי – נדרש רק אם מעלים ל-Google Drive במקום/בנוסף ל-GitHub
-      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-      DRIVE_FOLDER_ID: ${{ vars.DRIVE_FOLDER_ID }}
-      # עוגיות יוטיוב (base64 של cookies.txt, אולי דחוס ב-gzip) – נכתב על ידי התוסף
+      # עוגיות יוטיוב טריות (base64 של cookies.txt, אולי gzip) – נכתבות בכל הורדה מהתוסף
       YT_COOKIES_B64: ${{ secrets.YT_COOKIES_B64 }}
 
     steps:
@@ -73,38 +57,45 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: התקנת ffmpeg
+      - name: התקנת yt-dlp ו-ffmpeg (תמיד)
         run: |
-          if ! command -v ffmpeg >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq ffmpeg
-          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
           ffmpeg -version | head -n 1
-
-      - name: התקנת חבילות Python
-        run: |
           python -m pip install --upgrade pip
-          pip install -r scripts/requirements.txt
+          pip install --upgrade -r scripts/requirements.txt
+          yt-dlp --version
 
-      - name: הרצת תהליך ההורדה
+      - name: הורדת הסרטון ופרסום ב-Release
         env:
           INPUT_URL: ${{ inputs.url }}
           INPUT_QUALITY: ${{ inputs.quality }}
-          INPUT_TARGET: ${{ inputs.target }}
-          INPUT_DRY: ${{ inputs.dry_run }}
-          INPUT_MAX: ${{ inputs.max_messages }}
         run: |
-          ARGS=()
-          if [ "$INPUT_DRY" = "true" ]; then ARGS+=(--dry-run); fi
-          if [ -n "$INPUT_MAX" ] && [ "$INPUT_MAX" != "0" ]; then ARGS+=(--max "$INPUT_MAX"); fi
+          ARGS=(--url "$INPUT_URL")
           if [ -n "$INPUT_QUALITY" ]; then ARGS+=(--quality "$INPUT_QUALITY"); fi
-          if [ -n "$INPUT_TARGET" ]; then ARGS+=(--target "$INPUT_TARGET"); fi
-          if [ -n "$INPUT_URL" ]; then ARGS+=(--url "$INPUT_URL"); fi
-          echo "מריץ: python scripts/process_inbox.py ${ARGS[*]}"
-          python scripts/process_inbox.py "${ARGS[@]}"
+          echo "מריץ: python scripts/download.py ${ARGS[*]}"
+          python scripts/download.py "${ARGS[@]}"
 
-      - name: שמירת מידע על כשל
-        if: failure()
-        run: |
-          echo "### הרצה נכשלה" >> "$GITHUB_STEP_SUMMARY"
-          echo "בדקו את הלוגים של השלב הקודם. סיבות נפוצות: סיסמת אפליקציה שגויה, IMAP כבוי בחשבון המייל, או קישור שלא ניתן להוריד." >> "$GITHUB_STEP_SUMMARY"
+  cleanup:
+    name: ניקוי הורדות ישנות
+    if: github.event_name == 'schedule' || inputs.cleanup == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: הורדת הקוד
+        uses: actions/checkout@v4
+
+      - name: התקנת Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: התקנת התלויות
+        run: pip install -r scripts/requirements.txt
+
+      - name: מחיקת הורדות בנות יותר מ-24 שעות
+        run: python scripts/cleanup_releases.py

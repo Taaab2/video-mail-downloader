@@ -1,4 +1,4 @@
-/* לוגיקת החלון הקופץ של התוסף. */
+/* לוגיקת לוח הבקרה (נפתח כעמוד מלא). */
 (function () {
   'use strict';
 
@@ -9,6 +9,7 @@
   let settings = null;
   let gh = null;
   let pollTimer = null;
+  let busy = false;
 
   // ------------------------------------------------------------------ //
   // אתחול
@@ -26,10 +27,11 @@
     renderConnectionState();
 
     $('downloadBtn').addEventListener('click', () => download());
+    $('pasteBtn').addEventListener('click', pasteFromClipboard);
     $('useTabBtn').addEventListener('click', async () => {
       await prefillUrl(true);
     });
-    $('cookieBtn').addEventListener('click', () => sendCookies());
+    $('cookieBtn').addEventListener('click', () => refreshCookies(true));
     $('cookieCheckBtn').addEventListener('click', () => checkCookies(true));
     $('refreshReleasesBtn').addEventListener('click', () => renderReleases());
     $('openOptions').addEventListener('click', (event) => {
@@ -38,22 +40,18 @@
         chrome.runtime.openOptionsPage();
       }
     });
-    for (const id of ['qualitySelect', 'targetSelect']) {
-      $(id).addEventListener('change', () => {
-        const patch = {};
-        patch[id === 'qualitySelect' ? 'DEFAULT_QUALITY' : 'DEFAULT_TARGET'] = $(id).value;
-        settings = Object.assign(settings, patch);
-        u.saveSettings(patch);
-      });
-    }
+    $('urlInput').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') download();
+    });
+    $('qualitySelect').addEventListener('change', () => {
+      settings.DEFAULT_QUALITY = $('qualitySelect').value;
+      u.saveSettings({ DEFAULT_QUALITY: settings.DEFAULT_QUALITY });
+    });
   }
 
   function renderSelects() {
     $('qualitySelect').innerHTML = window.qualities.QUALITIES.map(
       (q) => `<option value="${q.id}"${q.id === settings.DEFAULT_QUALITY ? ' selected' : ''}>${u.esc(q.label)}</option>`
-    ).join('');
-    $('targetSelect').innerHTML = window.qualities.TARGETS.map(
-      (t) => `<option value="${t.id}"${t.id === settings.DEFAULT_TARGET ? ' selected' : ''}>${u.esc(t.label)}</option>`
     ).join('');
   }
 
@@ -78,6 +76,28 @@
     if (isVideo && (force || !input.value)) input.value = current;
   }
 
+  /** כפתור ההדבק: קורא את הלוח דרך ה-API של התוסף, ואם אין – דרך הדבקה רגילה. */
+  async function pasteFromClipboard() {
+    const input = $('urlInput');
+    try {
+      let text = '';
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+        text = await navigator.clipboard.readText();
+      }
+      if (!text) {
+        input.focus();
+        input.select();
+        toast('רשמו Ctrl+V להדבקה', true);
+        return;
+      }
+      input.value = text.trim();
+      toast('הודבק ✓');
+    } catch (err) {
+      input.focus();
+      toast('אין הרשאה לקרוא מהלוח – הדביקו ידנית (Ctrl+V)', true);
+    }
+  }
+
   // ------------------------------------------------------------------ //
   // הורדה
   // ------------------------------------------------------------------ //
@@ -89,6 +109,7 @@
   }
 
   async function download() {
+    if (busy) return;
     const url = normalizeUrl($('urlInput').value);
     if (!url) {
       toast('הדביקו קישור לסרטון', true);
@@ -99,25 +120,23 @@
       return;
     }
     const quality = $('qualitySelect').value;
-    const target = $('targetSelect').value;
 
-    setRunPill('busy', 'שולח…');
+    busy = true;
     $('downloadBtn').disabled = true;
+    setRunPill('busy', 'מרענן עוגיות…');
     try {
-      // זוכרים איזו הרצה הייתה האחרונה, כדי לא להתבלבל איתה כשהחדשה עוד לא הופיעה
+      // 1) עוגיות טריות וחמות – בכל הורדה, לפני שמפעילים את ההרצה
+      await refreshCookies(false);
+
+      // 2) מפעילים את ההורדה
+      setRunPill('busy', 'שולח…');
       const before = await gh.listRuns(settings.WORKFLOW, 1).catch(() => []);
       const beforeId = before.length ? before[0].id : null;
       await u.saveSettings({ BEFORE_RUN_ID: beforeId, PENDING: true });
       settings.BEFORE_RUN_ID = beforeId;
       settings.PENDING = true;
 
-      await gh.dispatch(settings.WORKFLOW, {
-        url,
-        quality,
-        target,
-        dry_run: false,
-        max_messages: '0',
-      });
+      await gh.dispatch(settings.WORKFLOW, { url, quality });
       toast('ההרצה נשלחה ל-GitHub');
       setRunPill('busy', 'ממתין להתחלה…');
       startPolling();
@@ -127,6 +146,8 @@
       settings.PENDING = false;
       setRunPill('bad', 'שגיאה');
       toast(err.message, true);
+    } finally {
+      busy = false;
       $('downloadBtn').disabled = false;
     }
   }
@@ -143,11 +164,10 @@
     try {
       await pollRuns(false);
     } catch (err) {
-      /* שקט – לא מפריעים */
+      /* שקט */
     }
   }
 
-  /** מנטר את ההרצה האחרונה. כשמסתיימת בהצלחה – מציג קישורים מדווחים. */
   async function pollRuns(fromDispatch) {
     const runs = await gh.listRuns(settings.WORKFLOW, 3);
     if (!runs.length) {
@@ -156,7 +176,6 @@
     }
     const run = runs[0];
 
-    // ממתינים שההרצה שהפעלנו תופיע ברשימה, ולא מתייחסים להרצה קודמת
     if (settings.PENDING && settings.BEFORE_RUN_ID && run.id === settings.BEFORE_RUN_ID) {
       setRunPill('busy', 'ממתין להתחלה…');
       startPolling();
@@ -173,7 +192,6 @@
     }
 
     stopPolling();
-    $('downloadBtn').disabled = false;
     settings.PENDING = false;
     u.saveSettings({ PENDING: false });
     if (run.conclusion === 'success') {
@@ -201,14 +219,17 @@
       const rows = latest.assets.map((a) => `
         <tr>
           <td>${u.esc(a.name)}<br><span class="tiny muted">${u.esc(u.humanSize(a.size))}</span></td>
-          <td style="width:120px;white-space:nowrap">
-            <a class="link" href="${u.esc(a.url)}" target="_blank">הורדה</a>
-            <span class="link" style="margin-inline-start:8px" data-copy="${u.esc(a.url)}">העתק</span>
+          <td style="width:230px;white-space:nowrap">
+            <button class="btn sm" data-token-dl="${a.id != null ? a.id : ''}" data-name="${u.esc(a.name)}">הורדה מאובטחת</button>
+            <button class="btn ghost sm" data-copy="${u.esc(a.url)}">קישור ישיר</button>
           </td>
         </tr>`).join('');
       $('resultBox').innerHTML =
-        `<div class="result"><strong>מוכן להורדה ✓</strong><table style="margin-top:6px">${rows}</table></div>`;
-      bindCopyButtons($('resultBox'));
+        `<div class="result"><strong>מוכן ✓ – בחרו איך להוריד</strong>` +
+        `<table style="margin-top:6px">${rows}</table>` +
+        `<div class="tiny muted" style="margin-top:6px">"הורדה מאובטחת" מורידה דרך הטוקן (עובד גם במאגר פרטי). ` +
+        `"קישור ישיר" מעתיק קישור GitHub שאפשר לפתוח בכל דפדפן.</div></div>`;
+      bindResultButtons($('resultBox'));
       await renderReleases();
     } catch (err) {
       toast(err.message, true);
@@ -229,49 +250,64 @@
     }
   }
 
-  function bindCopyButtons(scope) {
+  function bindResultButtons(scope) {
     u.$$('[data-copy]', scope).forEach((el) => {
-      el.addEventListener('click', () => u.copyText(el.getAttribute('data-copy')));
+      el.addEventListener('click', () => u.copyText(el.getAttribute('data-copy'), 'הקישור'));
+    });
+    u.$$('[data-token-dl]', scope).forEach((el) => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-token-dl');
+        const name = el.getAttribute('data-name');
+        el.disabled = true;
+        const label = el.textContent;
+        el.textContent = 'מוריד…';
+        try {
+          await gh.downloadAsset(id, name);
+          toast('ההורדה החלה ✓');
+        } catch (err) {
+          toast(err.message, true);
+        } finally {
+          el.disabled = false;
+          el.textContent = label;
+        }
+      });
     });
   }
 
   // ------------------------------------------------------------------ //
   // עוגיות
   // ------------------------------------------------------------------ //
-  async function sendCookies() {
-    const btn = $('cookieBtn');
-    btn.disabled = true;
-    btn.textContent = 'שולח…';
+  /** אוסף עוגיות יוטיוב מהדפדפן ושולח אותן ל-Secret. מחזיר true אם נשלחו. */
+  async function refreshCookies(verbose) {
+    if (!settings.TOKEN || !settings.REPO) {
+      if (verbose) toast('קודם הגדירו טוקן ומאגר', true);
+      return false;
+    }
     try {
       const cookies = await window.ytCookies.collect(settings.INCLUDE_GOOGLE_COOKIES);
       if (!cookies.length) {
-        throw new Error('לא נמצאו עוגיות של יוטיוב. פתחו את יוטיוב בדפדפן ונסו שוב.');
+        if (verbose) toast('לא נמצאו עוגיות של יוטיוב בדפדפן', true);
+        return false;
       }
-      const loggedIn = window.ytCookies.looksLoggedIn(cookies);
       const text = window.ytCookies.toNetscape(cookies);
       const packed = await window.ytCookies.packForSecret(text);
-      const approxKb = Math.round(packed.payload.length / 1024);
-      if (approxKb > 32) {
-        throw new Error(`העוגיות גדולות מדי ל-Secret (${approxKb}KB). נסו לכבות עוגיות google.com בהגדרות.`);
-      }
       await gh.setSecret(settings.COOKIES_SECRET, packed.payload);
       const info = {
         count: cookies.length,
         fingerprint: window.ytCookies.fingerprint(cookies),
         at: new Date().toISOString(),
-        sizeKb: approxKb,
+        sizeKb: Math.round(packed.payload.length / 1024),
         compressed: packed.compressed,
-        loggedIn,
+        loggedIn: window.ytCookies.looksLoggedIn(cookies),
       };
       settings.COOKIE_INFO = info;
       await u.saveSettings({ COOKIE_INFO: info });
       renderCookieInfo(info, true);
-      toast('העוגיות נשלחו ל-Secret ✓');
+      if (verbose) toast('העוגיות רועננו ונשלחו ✓');
+      return true;
     } catch (err) {
-      toast(err.message, true);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'שלח עוגיות ל-Secret';
+      if (verbose) toast('רענון העוגיות נכשל: ' + err.message, true);
+      return false;
     }
   }
 
@@ -312,12 +348,12 @@
     else if (info) parts.push('<span class="pill bad">העוגיות לא נמצאו ב-Secret</span>');
     if (info) {
       parts.push(
-        `<div style="margin-top:6px">נשלחו: ${u.esc(u.fmtDate(info.at))} · ${info.count} עוגיות · ${info.sizeKb}KB` +
-        `${info.loggedIn ? ' · כולל עוגיות התחברות ✓' : ' · ⚠️ נראה שאינכם מחוברים ליוטיוב'}${info.compressed ? ' · דחוס' : ''}</div>`
+        `<div style="margin-top:6px">רענון אחרון: ${u.esc(u.fmtDate(info.at))} · ${info.count} עוגיות · ${info.sizeKb}KB` +
+        `${info.loggedIn ? ' · כולל התחברות ✓' : ' · ⚠️ נראה שאינכם מחוברים ליוטיוב'}${info.compressed ? ' · דחוס' : ''}</div>`
       );
     }
     if (currentFingerprint && info && currentFingerprint !== info.fingerprint) {
-      parts.push('<div style="margin-top:6px" class="pill busy">העוגיות בדפדפן השתנו – כדאי לשלוח שוב</div>');
+      parts.push('<div style="margin-top:6px" class="pill busy">העוגיות בדפדפן השתנו – כדאי לרענן</div>');
     }
     box.innerHTML = parts.join('');
   }
@@ -344,14 +380,14 @@
           <table>${rel.assets.map((a) => `
             <tr>
               <td>${u.esc(a.name)}<br><span class="tiny muted">${u.esc(u.humanSize(a.size))}</span></td>
-              <td style="width:110px;white-space:nowrap">
-                <a class="link" href="${u.esc(a.url)}" target="_blank">הורדה</a>
-                <span class="link" style="margin-inline-start:8px" data-copy="${u.esc(a.url)}">העתק</span>
+              <td style="width:210px;white-space:nowrap">
+                <button class="btn sm" data-token-dl="${a.id != null ? a.id : ''}" data-name="${u.esc(a.name)}">הורדה מאובטחת</button>
+                <button class="btn ghost sm" data-copy="${u.esc(a.url)}">קישור ישיר</button>
               </td>
             </tr>`).join('')}</table>
         </div>`).join('');
       box.innerHTML = html;
-      bindCopyButtons(box);
+      bindResultButtons(box);
     } catch (err) {
       box.textContent = err.message;
     }

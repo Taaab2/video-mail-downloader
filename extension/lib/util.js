@@ -8,7 +8,6 @@
     WORKFLOW: 'downloader.yml',
     COOKIES_SECRET: 'YT_COOKIES_B64',
     DEFAULT_QUALITY: 'best',
-    DEFAULT_TARGET: 'github',
     INCLUDE_GOOGLE_COOKIES: true,
   };
 

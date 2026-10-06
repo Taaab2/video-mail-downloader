@@ -12,15 +12,9 @@
     { id: 'audio', label: 'אודיו בלבד (mp3)', hint: 'מתאים לשירים והרצאות' },
   ];
 
-  const TARGETS = [
-    { id: 'github', label: 'GitHub Releases' },
-    { id: 'drive', label: 'Google Drive' },
-    { id: 'both', label: 'גם GitHub וגם Drive' },
-  ];
-
   function byId(id) {
     return QUALITIES.find((q) => q.id === id) || QUALITIES[0];
   }
 
-  root.qualities = { QUALITIES, TARGETS, byId };
+  root.qualities = { QUALITIES, byId };
 })(typeof self !== 'undefined' ? self : this);

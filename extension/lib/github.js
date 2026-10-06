@@ -206,6 +206,7 @@
         created_at: rel.created_at,
         url: rel.html_url,
         assets: (rel.assets || []).map((a) => ({
+          id: a.id,
           name: a.name,
           size: a.size,
           downloads: a.download_count,
@@ -218,6 +219,33 @@
       return this.request('DELETE', `/repos/${this.repo}/releases/tags/${tag}`, undefined, {
         expect: [204, 404],
       });
+    }
+
+    /** הורדת קובץ Release דרך ה-API עם הטוקן – עובד גם במאגר פרטי. */
+    async downloadAsset(assetId, name) {
+      this.requireRepo();
+      const url = `${API}/repos/${this.repo}/releases/assets/${assetId}`;
+      let resp;
+      try {
+        resp = await fetch(url, {
+          headers: { Authorization: 'Bearer ' + this.token, Accept: 'application/octet-stream' },
+          redirect: 'follow',
+        });
+      } catch (err) {
+        throw new GitHubError('אין חיבור ל-GitHub: ' + err.message);
+      }
+      if (!resp.ok) {
+        throw new GitHubError(await this.describeError(resp, 'GET', `/releases/assets/${assetId}`));
+      }
+      const blob = await resp.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = name || 'download.zip';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 15000);
     }
   }
 

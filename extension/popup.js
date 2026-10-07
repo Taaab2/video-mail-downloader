@@ -203,6 +203,43 @@
     }
   }
 
+  /** מוריד את כל הסרטונים שבערוץ/פלייליסט (הרשימה השלמה, גם מעבר לתקרת התצוגה). */
+  async function downloadWhole(collectionUrl) {
+    if (busy) return;
+    if (!collectionUrl) {
+      toast('הדביקו קישור לערוץ או פלייליסט', true);
+      return;
+    }
+    if (!settings.TOKEN || !settings.REPO) {
+      toast('קודם הגדירו טוקן ומאגר בהגדרות', true);
+      return;
+    }
+    const quality = $('qualitySelect').value;
+    busy = true;
+    $('downloadBtn').disabled = true;
+    setRunPill('busy', 'מרענן עוגיות…');
+    try {
+      const cookieStatus = await refreshCookies(false);
+      if (cookieStatus === 'error') {
+        toast('רענון העוגיות נכשל – ממשיך בכל זאת', true);
+      }
+      await dispatchRun(
+        { mode: 'download', quality, url: collectionUrl, whole: 'true' },
+        'download',
+        'שולח ערוץ שלם…'
+      );
+      toast('ההרצה נשלחה – מוריד את כל הערוץ (עשוי לקחת זמן)');
+    } catch (err) {
+      await u.saveSettings({ PENDING: false });
+      settings.PENDING = false;
+      setRunPill('bad', 'שגיאה');
+      toast(err.message, true);
+    } finally {
+      busy = false;
+      $('downloadBtn').disabled = false;
+    }
+  }
+
   /** שולף את רשימת הסרטונים מפלייליסט/ערוץ ומציג בחירה. */
   async function listVideos() {
     if (busy) return;
@@ -378,6 +415,7 @@
         <div class="vlist">${rows}</div>
         <div class="actions">
           <button class="btn" id="dlSelected">הורד את הנבחרים</button>
+          <button class="btn ghost" id="dlWhole" title="מוריד את כל סרטוני הערוץ/פלייליסט, גם כאלה שלא ברשימה">📚 הורד את כל הערוץ (${videos.length})</button>
         </div>
       </div>`;
 
@@ -398,6 +436,10 @@
       }
       toast('שולח ' + chosen.length + ' סרטונים להורדה…');
       await downloadUrls(chosen);
+    });
+    $('dlWhole').addEventListener('click', () => {
+      const target = data.resolved_url || data.url || normalizeUrl($('urlInput').value);
+      downloadWhole(target);
     });
     update();
   }

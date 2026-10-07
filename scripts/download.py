@@ -626,6 +626,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="קישור לסרטון (אפשר לחזור עליו לבחירה מרובה)")
     parser.add_argument("--list", action="store_true",
                         help="שולף רשימת סרטונים מפלייליסט/ערוץ בלי להוריד")
+    parser.add_argument("--whole", action="store_true",
+                        help="מוריד את כל הסרטונים שבערוץ/פלייליסט (רשימה שלמה)")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="תקרה למספר הסרטונים במצב --whole")
     parser.add_argument("--check", action="store_true", help="בדיקת הגדרות וכלים")
     parser.add_argument(
         "--quality",
@@ -674,6 +678,26 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.list:
         return run_list(urls[0], cfg, args, cookiefile)
+
+    # ערוץ/פלייליסט שלם: שולפים את כל הסרטונים בענן ומורידים כל אחד מהם.
+    # שולפים כאן ולא מהתוסף כדי לעקוף את תקרת הרשימה (max_playlist_items).
+    if args.whole:
+        limit = args.limit or int(cfg.get("max_channel_items") or 1000)
+        log(f"מצב ערוץ שלם: שולף את כל הסרטונים (עד {limit})")
+        try:
+            collection = enumerate_playlist(urls[0], cfg, cookiefile, limit)
+        except DownloadError as exc:
+            log_error(str(exc))
+            return 1
+        except Exception as exc:  # noqa: BLE001 - yt-dlp זורק חריגות רבות
+            log_error(f"שליפת רשימת הערוץ נכשלה: {_friendly_list_error(exc, urls[0])}")
+            return 1
+        videos = collection.get("videos") or []
+        if not videos:
+            log_error("לא נמצאו סרטונים בקישור הזה להורדה שלמה.")
+            return 1
+        log(f"נמצאו {len(videos)} סרטונים – מוריד את כולם (זה עשוי לקחת זמן)")
+        urls = [item["url"] for item in videos]
 
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN", "")
     uploader: ReleaseUploader | None = None

@@ -9,5 +9,6 @@
   "ascii_filenames": false,
   "release_tag_prefix": "dl",
   "delete_releases_after_hours": 24,
-  "max_playlist_items": 200
+  "max_playlist_items": 200,
+  "max_channel_items": 1000
 }

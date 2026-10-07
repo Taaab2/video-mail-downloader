@@ -20,6 +20,14 @@ on:
         description: "כמה קישורים להורדה (שורה לכל קישור) – לבחירה מרשימה"
         type: string
         default: ""
+      whole:
+        description: "להוריד את כל הסרטונים שבערוץ/פלייליסט"
+        type: boolean
+        default: false
+      limit:
+        description: "תקרה למספר הסרטונים במצב ערוץ שלם (ריק = ברירת מחדל)"
+        type: string
+        default: ""
       quality:
         description: "איכות ההורדה"
         type: choice
@@ -121,9 +129,13 @@ jobs:
           INPUT_URL: ${{ inputs.url }}
           INPUT_URLS: ${{ inputs.urls }}
           INPUT_QUALITY: ${{ inputs.quality }}
+          INPUT_WHOLE: ${{ inputs.whole }}
+          INPUT_LIMIT: ${{ inputs.limit }}
         run: |
           ARGS=(--json)
           if [ -n "$INPUT_QUALITY" ]; then ARGS+=(--quality "$INPUT_QUALITY"); fi
+          if [ "$INPUT_WHOLE" = "true" ]; then ARGS+=(--whole); fi
+          if [ -n "$INPUT_LIMIT" ]; then ARGS+=(--limit "$INPUT_LIMIT"); fi
           if [ -n "$INPUT_URL" ]; then ARGS+=(--url "$INPUT_URL"); fi
           if [ -n "$INPUT_URLS" ]; then
             while IFS= read -r line; do

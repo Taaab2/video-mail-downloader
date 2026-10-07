@@ -25,6 +25,14 @@ import traceback
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
+
+# הפלט יכול להכיל כותרות בכל שפה; מוודאים שהדפסה לא תקרוס על קידוד הקונסולה
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001 - קונסולה ישנה בלי reconfigure
+        pass
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -123,6 +131,38 @@ def _normalize_collection_url(url: str) -> str:
     return url
 
 
+# תווי בקרה/כיווניות נסתרים (למשל U+2066) שמקלקלים תצוגה ועלולים להפיל הדפסה
+_UNWANTED_CHARS = re.compile(
+    r"[\x00-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]"
+)
+
+
+def _clean_text(text: str) -> str:
+    """מנקה תווים נסתרים ומצמצם רווחים – כותרות טיקטוק מכילות תווים כאלה."""
+    return re.sub(r"\s+", " ", _UNWANTED_CHARS.sub("", str(text or ""))).strip()
+
+
+def _impersonate_target(cfg: dict):
+    """בונה ImpersonateTarget לחיקוי דפדפן. נדרש לטיקטוק משרתי ענן.
+
+    מחזיר None אם החיקוי כבוי או ש-curl_cffi לא מותקן (ואז ייתכן חסימה).
+    """
+    name = str(cfg.get("impersonate") or "").strip()
+    if not name:
+        return None
+    try:
+        import curl_cffi  # noqa: F401, PLC0415
+        from yt_dlp.networking.impersonate import ImpersonateTarget  # noqa: PLC0415
+    except Exception:  # noqa: BLE001 - curl_cffi אופציונלי
+        log("curl_cffi לא מותקן – בלי חיקוי דפדפן (טיקטוק עלול להיחסם)")
+        return None
+    try:
+        return ImpersonateTarget.from_str(name)
+    except Exception:  # noqa: BLE001
+        log(f"יעד חיקוי לא מוכר ({name}) – מדלג")
+        return None
+
+
 def _entry_to_video(entry: dict | None) -> dict | None:
     """ממיר רשומת yt-dlp (מ-flat extraction) לפריט סרטון מתומצת."""
     if not isinstance(entry, dict):
@@ -131,7 +171,12 @@ def _entry_to_video(entry: dict | None) -> dict | None:
     if entry.get("_type") == "playlist":
         return None
     vid = str(entry.get("id") or "").strip()
-    title = str(entry.get("title") or entry.get("fulltitle") or vid).strip()
+    title = _clean_text(entry.get("title") or entry.get("fulltitle"))
+    if not title:
+        # לטקטוק אין כיתוב ב-flat extraction – נופלים לשם הטראק ואז למזהה
+        title = _clean_text(entry.get("track") or entry.get("description"))
+    if not title:
+        title = vid
     url = str(entry.get("webpage_url") or entry.get("url") or "").strip()
     ie = str(entry.get("ie_key") or entry.get("extractor_key") or "").lower()
     if not url.startswith("http"):
@@ -173,6 +218,9 @@ def enumerate_playlist(url: str, cfg: dict, cookiefile: Path | None,
         components = ["ejs:github"]
     if components:
         opts["remote_components"] = [str(name) for name in components]
+    impersonate = _impersonate_target(cfg)
+    if impersonate is not None:
+        opts["impersonate"] = impersonate
     if cookiefile:
         opts["cookiefile"] = str(cookiefile)
 
@@ -322,6 +370,9 @@ class Downloader:
             components = ["ejs:github"]
         if components:
             opts["remote_components"] = [str(name) for name in components]
+        impersonate = _impersonate_target(self.cfg)
+        if impersonate is not None:
+            opts["impersonate"] = impersonate
         if self.cookiefile:
             opts["cookiefile"] = str(self.cookiefile)
         if preset.get("audio_only"):
@@ -494,6 +545,19 @@ def run_checks(cfg: dict) -> int:
 # --------------------------------------------------------------------------- #
 # שליפת רשימה ופרסומה (מצב list)
 # --------------------------------------------------------------------------- #
+def _friendly_list_error(exc: Exception, url: str) -> str:
+    """מתרגם שגיאות נפוצות של yt-dlp להודעה מובנת למשתמש."""
+    text = str(exc)
+    host = urlparse(url).netloc.lower()
+    if ("Failed to parse JSON" in text or "Unexpected response" in text) \
+            and "tiktok" in host:
+        return (
+            "טיקטוק חסם את הבקשה (הגנת anti-bot). ודאו ש-yt-dlp מעודכן ומותקן curl_cffi "
+            "לחיקוי דפדפן, או נסו שוב מאוחר יותר. " + text
+        )
+    return text
+
+
 def run_list(url: str, cfg: dict, args, cookiefile: Path | None) -> int:
     """שולף את רשימת הסרטונים מאריך/פלייליסט.
 
@@ -508,7 +572,7 @@ def run_list(url: str, cfg: dict, args, cookiefile: Path | None) -> int:
         log_error(str(exc))
         return 1
     except Exception as exc:  # noqa: BLE001 - yt-dlp זורק חריגות רבות
-        log_error(f"שליפת הרשימה נכשלה: {exc}")
+        log_error(f"שליפת הרשימה נכשלה: {_friendly_list_error(exc, url)}")
         return 1
 
     count = payload["count"]

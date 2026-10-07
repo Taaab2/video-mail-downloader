@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "הורדות סרטונים",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "מוריד סרטון או פלייליסט/ערוץ בענן של GitHub (yt-dlp), אורז ל-ZIP ומחזיר הורדה מאובטחת או קישור ישיר.",
   "permissions": ["cookies", "storage", "tabs", "activeTab", "clipboardRead"],
   "host_permissions": [
@@ -10,7 +10,8 @@
     "https://objects.githubusercontent.com/*",
     "https://*.githubusercontent.com/*",
     "https://*.youtube.com/*",
-    "https://*.google.com/*"
+    "https://*.google.com/*",
+    "https://*.tiktok.com/*"
   ],
   "action": {
     "default_title": "הורדות סרטונים"

@@ -8,6 +8,9 @@
 
   const YT_DOMAINS = ['https://www.youtube.com', 'https://youtube.com', 'https://m.youtube.com'];
   const GOOGLE_DOMAINS = ['https://www.google.com', 'https://accounts.google.com'];
+  const TIKTOK_DOMAINS = ['https://www.tiktok.com', 'https://tiktok.com'];
+  // דומיינים שנשלחים תמיד – עוגיות טיקטוק נדרשות לשליפת רשימות/הורדה מערוץ
+  const EXTRA_COOKIE_DOMAINS = ['.tiktok.com', 'tiktok.com'];
   const HEADER = [
     '# Netscape HTTP Cookie File',
     '# נוצר על ידי תוסף "הורדות סרטונים" – לשימוש yt-dlp בלבד',
@@ -31,7 +34,8 @@
   /** מחזיר את כל העוגיות הרלוונטיות ליוטיוב (כולל google.com כברירת מחדל). */
   async function collect(includeGoogle) {
     if (!hasCookieApi()) throw new Error('אין הרשאת cookies לדפדפן הזה');
-    const filters = [{ domain: '.youtube.com' }, { domain: 'youtube.com' }];
+    const filters = [{ domain: '.youtube.com' }, { domain: 'youtube.com' }]
+      .concat(EXTRA_COOKIE_DOMAINS.map((d) => ({ domain: d })));
     if (includeGoogle) filters.push({ domain: '.google.com' }, { domain: 'google.com' });
     const results = await Promise.all(filters.map((f) => getAll(f).catch(() => [])));
     const seen = new Set();
@@ -117,5 +121,6 @@
     hasCookieApi,
     YT_DOMAINS,
     GOOGLE_DOMAINS,
+    TIKTOK_DOMAINS,
   };
 })(typeof self !== 'undefined' ? self : this);

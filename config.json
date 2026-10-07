@@ -4,6 +4,7 @@
   "allow_playlists": false,
   "js_runtimes": [],
   "remote_components": ["ejs:github"],
+  "impersonate": "chrome",
   "max_file_size_mb": 1900,
   "ascii_filenames": false,
   "release_tag_prefix": "dl",

@@ -87,3 +87,21 @@ tr:last-child td { border-bottom: 0; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+
+/* רשימת בחירת סרטונים מפלייליסט/ערוץ */
+.vhead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.vedit { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.vlist {
+  max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--panel); margin-bottom: 10px;
+}
+.vitem {
+  display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+  border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; margin: 0;
+}
+.vitem:last-child { border-bottom: 0; }
+.vitem:hover { background: var(--panel-2); }
+.vitem input[type=checkbox] { flex: 0 0 auto; width: 16px; height: 16px; accent-color: var(--accent); }
+.vindex { flex: 0 0 auto; min-width: 24px; color: var(--muted); font-size: 11.5px; text-align: center; }
+.vtitle { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: plaintext; text-align: start; }
+.vdur { flex: 0 0 auto; }

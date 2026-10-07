@@ -76,6 +76,8 @@ DEFAULTS: dict = {
     "release_tag_prefix": "dl",
     # כמה שעות לשמור Release לפני שהניקוי היומי מוחק אותו (0 = לעולם)
     "delete_releases_after_hours": 24,
+    # תקרה למספר הסרטונים שנשלפים מרשימת פלייליסט/ערוץ (בחירה להורדה)
+    "max_playlist_items": 200,
 }
 
 
@@ -99,6 +101,117 @@ def quality_preset(name: str | None) -> dict | None:
     if not name:
         return None
     return QUALITY_PRESETS.get(str(name).strip().lower())
+
+
+# --------------------------------------------------------------------------- #
+# שליפת רשימת סרטונים מפלייליסט/ערוץ (בלי להוריד)
+# --------------------------------------------------------------------------- #
+# כתובת שורש של ערוץ יוטיוב בלי לשונית מחזירה "טאבים" ולא סרטונים, ולכן
+# מפנים אותה אוטומטית ללשונית הסרטונים (/videos).
+_CHANNEL_RE = re.compile(
+    r"^https?://(?:www\.|m\.)?youtube\.com/"
+    r"(?P<kind>@[^/?#]+|channel/[^/?#]+|c/[^/?#]+|user/[^/?#]+)/?"
+    r"(?:\?.*)?$",
+    re.IGNORECASE,
+)
+
+
+def _normalize_collection_url(url: str) -> str:
+    match = _CHANNEL_RE.match(url.strip())
+    if match:
+        return f"https://www.youtube.com/{match.group('kind')}/videos"
+    return url
+
+
+def _entry_to_video(entry: dict | None) -> dict | None:
+    """ממיר רשומת yt-dlp (מ-flat extraction) לפריט סרטון מתומצת."""
+    if not isinstance(entry, dict):
+        return None
+    # טאבים של ערוץ ("סרטונים", "שורטים"…) חוזרים כרשימות מקוננות – מדלגים
+    if entry.get("_type") == "playlist":
+        return None
+    vid = str(entry.get("id") or "").strip()
+    title = str(entry.get("title") or entry.get("fulltitle") or vid).strip()
+    url = str(entry.get("webpage_url") or entry.get("url") or "").strip()
+    ie = str(entry.get("ie_key") or entry.get("extractor_key") or "").lower()
+    if not url.startswith("http"):
+        # ב-flat extraction של יוטיוב מאגר ה-url הוא רק מזהה הסרטון
+        if "youtu" in ie and vid:
+            url = f"https://www.youtube.com/watch?v={vid}"
+        else:
+            return None
+    return {
+        "id": vid,
+        "title": title or vid,
+        "url": url,
+        "duration": entry.get("duration"),
+        "uploader": entry.get("uploader") or entry.get("channel") or "",
+    }
+
+
+def enumerate_playlist(url: str, cfg: dict, cookiefile: Path | None,
+                      limit: int | None = None) -> dict:
+    """שולף (בלי להוריד) את רשימת הסרטונים בפלייליסט/ערוץ."""
+    if not Downloader.yt_dlp_available():
+        raise DownloadError("חבילת yt-dlp לא מותקנת (pip install -r scripts/requirements.txt)")
+    import yt_dlp  # noqa: PLC0415
+
+    if limit is None:
+        limit = int(cfg.get("max_playlist_items") or 200)
+    target = _normalize_collection_url(url)
+    opts: dict = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": "in_playlist",
+        "noplaylist": False,
+        "playlistend": int(limit),
+        "logger": _YdlLogger(),
+    }
+    components = cfg.get("remote_components")
+    if components is None:
+        components = ["ejs:github"]
+    if components:
+        opts["remote_components"] = [str(name) for name in components]
+    if cookiefile:
+        opts["cookiefile"] = str(cookiefile)
+
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(target, download=False)
+
+    entries = (info or {}).get("entries")
+    if entries is None:
+        entries = [info]
+    videos: list[dict] = []
+    seen: set[str] = set()
+    for entry in entries:
+        item = _entry_to_video(entry)
+        if not item or item["id"] in seen:
+            continue
+        seen.add(item["id"])
+        videos.append(item)
+    return {
+        "url": url,
+        "resolved_url": target,
+        "title": (info or {}).get("title") or "",
+        "count": len(videos),
+        "videos": videos,
+    }
+
+
+def _auto_tag(cfg: dict) -> str:
+    return (
+        f"{cfg['release_tag_prefix']}-"
+        f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{random.randint(0, 0xFFFF):04x}"
+    )
+
+
+def list_tag(run_id: str | None) -> str:
+    """תג Release של רשימת סרטונים – כולל מזהה ההרצה כדי שהתוסף ימצא אותו."""
+    run_id = str(run_id or "").strip()
+    if run_id:
+        return f"list-{run_id}"
+    return f"list-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{random.randint(0, 0xFFFF):04x}"
 
 
 # --------------------------------------------------------------------------- #
@@ -289,10 +402,15 @@ def zip_files(files: list[Path], workdir: Path) -> Path:
 # עיבוד בקשה בודדת
 # --------------------------------------------------------------------------- #
 def download_url(url: str, cfg: dict, args, uploader: ReleaseUploader | None,
-                 quality: str | None = None, cookiefile: Path | None = None) -> dict:
-    """מוריד קישור אחד, אורז ל-ZIP ומעלה כ-Release. מחזיר תוצאת JSON."""
+                 quality: str | None = None, cookiefile: Path | None = None,
+                 release: dict | None = None, tag: str | None = None) -> dict:
+    """מוריד קישור אחד, אורז ל-ZIP ומעלה כ-Release. מחזיר תוצאת JSON.
+
+    כשמעבירים release קיים – מעלים אליו את האסימון (בחירה של כמה סרטונים
+    בהרצה אחת). אחרת נוצר Release חדש לכל בקשה.
+    """
     max_bytes = int(cfg["max_file_size_mb"]) * 1024 * 1024
-    tag = f"{cfg['release_tag_prefix']}-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{random.randint(0, 0xFFFF):04x}"
+    tag = tag or _auto_tag(cfg)
     result: dict = {"ok": False, "url": url, "quality": quality, "asset_name": None,
                     "size": 0, "release_url": None, "error": None}
 
@@ -329,11 +447,12 @@ def download_url(url: str, cfg: dict, args, uploader: ReleaseUploader | None,
             log_error(result["error"])
             return result
         try:
-            release = uploader.create_release(
-                tag,
-                f"הורדה {datetime.now(timezone.utc):%Y-%m-%d %H:%M}",
-                f"הורדה של {url}",
-            )
+            if release is None:
+                release = uploader.create_release(
+                    tag,
+                    f"הורדה {datetime.now(timezone.utc):%Y-%m-%d %H:%M}",
+                    f"הורדה של {url}",
+                )
             # ה-label נושא את שם הסרטון המקורי (עברית נשמרת), גם אם שם האסימון
             # עצמו מומר ל-ASCII על ידי GitHub.
             asset = uploader.upload_asset(release, archive, label=archive.name)
@@ -372,9 +491,77 @@ def run_checks(cfg: dict) -> int:
     return 0 if problems == 0 else 1
 
 
+# --------------------------------------------------------------------------- #
+# שליפת רשימה ופרסומה (מצב list)
+# --------------------------------------------------------------------------- #
+def run_list(url: str, cfg: dict, args, cookiefile: Path | None) -> int:
+    """שולף את רשימת הסרטונים מאריך/פלייליסט.
+
+    מקומית מדפיס את הרשימה; בענן מפרסם אותה כקובץ JSON ב-Release שתומת ב-
+    list-<run_id>, כדי שהתוסף יוכל לשלוף אותה ולהציג בחירה למשתמש.
+    """
+    limit = int(cfg.get("max_playlist_items") or 200)
+    log(f"שולף רשימת סרטונים: {url} (עד {limit} סרטונים)")
+    try:
+        payload = enumerate_playlist(url, cfg, cookiefile, limit)
+    except DownloadError as exc:
+        log_error(str(exc))
+        return 1
+    except Exception as exc:  # noqa: BLE001 - yt-dlp זורק חריגות רבות
+        log_error(f"שליפת הרשימה נכשלה: {exc}")
+        return 1
+
+    count = payload["count"]
+    log(f"נמצאו {count} סרטונים ברשימה")
+    if count == 0:
+        log_error("לא נמצאו סרטונים בקישור הזה. נסו קישור לפלייליסט או ללשונית הסרטונים של הערוץ.")
+        return 1
+
+    if args.local:
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            for item in payload["videos"]:
+                log(f"  • {item['title']}")
+        return 0
+
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN", "")
+    if not (token and REPO):
+        log_error("חסרים GITHUB_TOKEN / GITHUB_REPOSITORY לפרסום הרשימה")
+        return 2
+    uploader = ReleaseUploader(token, REPO)
+    tag = list_tag(os.environ.get("GITHUB_RUN_ID"))
+
+    with tempfile.TemporaryDirectory(prefix="list-") as tmp:
+        json_path = Path(tmp) / "list.json"
+        json_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        try:
+            release = uploader.create_release(
+                tag,
+                f"רשימת סרטונים ({count})",
+                f"רשימת הסרטונים של {payload.get('resolved_url') or url}",
+            )
+            uploader.upload_asset(release, json_path, asset_name="list.json", label="רשימת סרטונים")
+        except ReleaseError as exc:
+            log_error(f"פרסום הרשימה נכשל: {exc}")
+            return 1
+
+    log_notice(f"הרשימה פורסמה כ-Release בתג {tag} ({count} סרטונים)")
+    if args.json:
+        print(json.dumps({"ok": True, "count": count, "tag": tag, "title": payload["title"]},
+                         ensure_ascii=False))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# פרמטרים
+# --------------------------------------------------------------------------- #
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="הורדת סרטון, אריזה כ-ZIP ופרסום כ-Release")
-    parser.add_argument("--url", help="קישור לסרטון")
+    parser.add_argument("--url", action="append", default=[],
+                        help="קישור לסרטון (אפשר לחזור עליו לבחירה מרובה)")
+    parser.add_argument("--list", action="store_true",
+                        help="שולף רשימת סרטונים מפלייליסט/ערוץ בלי להוריד")
     parser.add_argument("--check", action="store_true", help="בדיקת הגדרות וכלים")
     parser.add_argument(
         "--quality",
@@ -387,6 +574,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _collect_urls(raw_urls: list[str]) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+    for raw in raw_urls or []:
+        url = str(raw or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
+    return urls
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     cfg = load_config()
@@ -397,13 +596,20 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"ok": code == 0}, ensure_ascii=False))
         return code
 
-    if not args.url:
+    urls = _collect_urls(args.url)
+    if not urls:
         log_error("חסר --url. ההורדה מופעלת רק עם קישור.")
         return 2
-    url = args.url.strip()
-    if not re.match(r"^https?://", url, re.IGNORECASE):
-        log_error(f"קישור לא תקין: {url}")
-        return 2
+    for url in urls:
+        if not re.match(r"^https?://", url, re.IGNORECASE):
+            log_error(f"קישור לא תקין: {url}")
+            return 2
+
+    cookie_dir = Path(tempfile.mkdtemp(prefix="yt-cookies-"))
+    cookiefile = cookie_file_from_env(cookie_dir)
+
+    if args.list:
+        return run_list(urls[0], cfg, args, cookiefile)
 
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN", "")
     uploader: ReleaseUploader | None = None
@@ -417,25 +623,51 @@ def main(argv: list[str] | None = None) -> int:
     if args.quality:
         preset = quality_preset(args.quality) or {}
         log(f"איכות מבוקשת: {preset.get('label', args.quality)}")
-    log(f"מוריד: {url}")
+    log(f"מוריד {len(urls)} סרטונים" if len(urls) > 1 else f"מוריד: {urls[0]}")
 
-    cookie_dir = Path(tempfile.mkdtemp(prefix="yt-cookies-"))
-    cookiefile = cookie_file_from_env(cookie_dir)
+    # כל הסרטונים של הרצה אחת נארזים יחד ל-Release אחד (נבחרו כמה – מופיעים
+    # כתוצאה אחת עם כמה קבצים).
+    shared_tag = _auto_tag(cfg)
+    release: dict | None = None
+    if uploader is not None:
+        if len(urls) == 1:
+            title = f"הורדה {datetime.now(timezone.utc):%Y-%m-%d %H:%M}"
+            body = f"הורדה של {urls[0]}"
+        else:
+            title = f"הורדה של {len(urls)} סרטונים {datetime.now(timezone.utc):%Y-%m-%d %H:%M}"
+            body = "\n".join(f"- {u}" for u in urls)
+        try:
+            release = uploader.create_release(shared_tag, title, body)
+        except ReleaseError as exc:
+            log_error(f"יצירת ה-Release נכשלה: {exc}")
+            return 1
 
-    result = download_url(url, cfg, args, uploader, quality=args.quality, cookiefile=cookiefile)
+    results = [
+        download_url(url, cfg, args, uploader, quality=args.quality,
+                     cookiefile=cookiefile, release=release, tag=shared_tag)
+        for url in urls
+    ]
+    ok_count = sum(1 for r in results if r["ok"])
 
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary_path and result["ok"]:
+    if summary_path:
         try:
             with open(summary_path, "a", encoding="utf-8") as fh:
-                fh.write(f"- ✅ [{result['asset_name']}]({result.get('download_url', '')}) "
-                         f"({human_size(result['size'])})\n")
+                for item in results:
+                    if item["ok"]:
+                        fh.write(f"- ✅ [{item['asset_name']}]({item.get('download_url', '')}) "
+                                 f"({human_size(item['size'])})\n")
+                    else:
+                        fh.write(f"- ❌ {item['url']} – {item.get('error') or 'נכשל'}\n")
         except OSError:
             pass
 
     if args.json:
-        print(json.dumps(result, ensure_ascii=False))
-    return 0 if result["ok"] else 1
+        print(json.dumps({"ok": ok_count == len(results), "count": len(results),
+                          "ok_count": ok_count, "results": results}, ensure_ascii=False))
+    if ok_count != len(results):
+        log_error(f"{len(results) - ok_count} מתוך {len(results)} הורדות נכשלו")
+    return 0 if ok_count == len(results) else 1
 
 
 if __name__ == "__main__":

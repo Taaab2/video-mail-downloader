@@ -11,7 +11,7 @@
     INCLUDE_GOOGLE_COOKIES: true,
   };
 
-  const KEYS = Object.keys(FALLBACK).concat(['BEFORE_RUN_ID', 'PENDING', 'COOKIE_INFO']);
+  const KEYS = Object.keys(FALLBACK).concat(['BEFORE_RUN_ID', 'PENDING', 'PENDING_MODE', 'COOKIE_INFO']);
 
   /* חשוב: להסתכל על chrome.runtime.id – רק בהקשר תוסף אמיתי.
      בדף רגיל ב-Chromium קיים אובייקט chrome בלי API פעיל, ואז הקולבק לא חוזר. */

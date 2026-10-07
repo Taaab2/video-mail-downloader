@@ -18,7 +18,7 @@
 
     <div class="card">
       <h2>הורדה עכשיו</h2>
-      <label for="urlInput">קישור לסרטון</label>
+      <label for="urlInput">קישור לסרטון / פלייליסט / ערוץ</label>
       <div class="input-row">
         <input type="text" id="urlInput" dir="ltr" placeholder="https://www.youtube.com/watch?v=...">
         <button type="button" class="btn ghost sm" id="pasteBtn" title="הדבק מהלוח">📋 הדבק</button>
@@ -31,10 +31,12 @@
       </div>
       <div class="actions">
         <button class="btn" id="downloadBtn">הורד</button>
+        <button class="btn ghost" id="listBtn">📃 הצג רשימת סרטונים</button>
         <button class="btn ghost" id="useTabBtn">קח מהלשונית הפתוחה</button>
         <span class="pill" id="runPill" style="display:none"></span>
       </div>
       <div id="resultBox"></div>
+      <div id="playlistBox"></div>
     </div>
 
     <div class="card">

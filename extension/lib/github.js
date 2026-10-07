@@ -216,6 +216,50 @@
       }));
     }
 
+    /** מחזיר Release בודד לפי תג (או null אם לא קיים). */
+    async releaseByTag(tag) {
+      const rel = await this.request(
+        'GET',
+        `/repos/${this.repo}/releases/tags/${encodeURIComponent(tag)}`,
+        undefined,
+        { expect: [200, 404] }
+      );
+      if (!rel || !rel.tag_name) return null;
+      return {
+        tag: rel.tag_name,
+        name: rel.name,
+        created_at: rel.created_at,
+        url: rel.html_url,
+        assets: (rel.assets || []).map((a) => ({
+          id: a.id,
+          name: a.name,
+          label: a.label || '',
+          size: a.size,
+          downloads: a.download_count,
+          url: a.browser_download_url,
+        })),
+      };
+    }
+
+    /** קורא את תוכן האסימון כטקסט (למשל רשימת סרטונים ב-JSON). */
+    async fetchAssetText(assetId) {
+      this.requireRepo();
+      const url = `${API}/repos/${this.repo}/releases/assets/${assetId}`;
+      let resp;
+      try {
+        resp = await fetch(url, {
+          headers: { Authorization: 'Bearer ' + this.token, Accept: 'application/octet-stream' },
+          redirect: 'follow',
+        });
+      } catch (err) {
+        throw new GitHubError('אין חיבור ל-GitHub: ' + err.message);
+      }
+      if (!resp.ok) {
+        throw new GitHubError(await this.describeError(resp, 'GET', `/releases/assets/${assetId}`));
+      }
+      return resp.text();
+    }
+
     deleteRelease(tag) {
       return this.request('DELETE', `/repos/${this.repo}/releases/tags/${tag}`, undefined, {
         expect: [204, 404],

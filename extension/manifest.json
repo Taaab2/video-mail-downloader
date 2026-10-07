@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "הורדות סרטונים",
-  "version": "2.0.0",
-  "description": "מוריד סרטון בענן של GitHub (yt-dlp), אורז אותו ל-ZIP ומחזיר הורדה מאובטחת או קישור ישיר.",
+  "version": "2.1.0",
+  "description": "מוריד סרטון או פלייליסט/ערוץ בענן של GitHub (yt-dlp), אורז ל-ZIP ומחזיר הורדה מאובטחת או קישור ישיר.",
   "permissions": ["cookies", "storage", "tabs", "activeTab", "clipboardRead"],
   "host_permissions": [
     "https://api.github.com/*",

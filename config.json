@@ -7,5 +7,6 @@
   "max_file_size_mb": 1900,
   "ascii_filenames": false,
   "release_tag_prefix": "dl",
-  "delete_releases_after_hours": 24
+  "delete_releases_after_hours": 24,
+  "max_playlist_items": 200
 }

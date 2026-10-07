@@ -1,13 +1,23 @@
 name: הורדת סרטונים
 
-# שתי הרצות:
-#   1. הורדה – מופעלת ידנית מהתוסף (או מהאתר) עם קישור ואיכות.
-#   2. ניקוי – פעם ביום מוחק הורדות (Releases) בנות יותר מ-24 שעות.
+# שלוש הרצות:
+#   1. download – הורדת סרטון אחד או כמה (נבחרים מרשימה), מופעל מהתוסף.
+#   2. list     – שליפת רשימת הסרטונים מפלייליסט/ערוץ (בלי להוריד) עבור בחירה.
+#   3. cleanup  – פעם ביום מוחק הורדות (Releases) בנות יותר מ-24 שעות.
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "מצב הפעולה"
+        type: choice
+        default: download
+        options: [download, list]
       url:
-        description: "קישור לסרטון"
+        description: "קישור לסרטון / פלייליסט / ערוץ"
+        type: string
+        default: ""
+      urls:
+        description: "כמה קישורים להורדה (שורה לכל קישור) – לבחירה מרשימה"
         type: string
         default: ""
       quality:
@@ -30,9 +40,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  list:
+    name: שליפת רשימת סרטונים
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'list' && inputs.url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      YT_COOKIES_B64: ${{ secrets.YT_COOKIES_B64 }}
+
+    steps:
+      - name: הורדת הקוד
+        uses: actions/checkout@v4
+
+      - name: התקנת Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: התקנת Deno (נדרש לחילוץ מ-YouTube)
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: התקנת yt-dlp
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade -r scripts/requirements.txt
+          yt-dlp --version
+
+      - name: שליפת רשימת הסרטונים ופרסומה
+        env:
+          INPUT_URL: ${{ inputs.url }}
+        run: |
+          python scripts/download.py --list --json --url "$INPUT_URL"
+
   download:
     name: הורדה
-    if: github.event_name == 'workflow_dispatch' && inputs.url != ''
+    if: |
+      github.event_name == 'workflow_dispatch' && inputs.mode != 'list' &&
+      (inputs.url != '' || inputs.urls != '')
     runs-on: ubuntu-latest
     timeout-minutes: 350
 
@@ -66,14 +116,22 @@ jobs:
           pip install --upgrade -r scripts/requirements.txt
           yt-dlp --version
 
-      - name: הורדת הסרטון ופרסום ב-Release
+      - name: הורדת הסרטונים ופרסום ב-Release
         env:
           INPUT_URL: ${{ inputs.url }}
+          INPUT_URLS: ${{ inputs.urls }}
           INPUT_QUALITY: ${{ inputs.quality }}
         run: |
-          ARGS=(--url "$INPUT_URL")
+          ARGS=(--json)
           if [ -n "$INPUT_QUALITY" ]; then ARGS+=(--quality "$INPUT_QUALITY"); fi
-          echo "מריץ: python scripts/download.py ${ARGS[*]}"
+          if [ -n "$INPUT_URL" ]; then ARGS+=(--url "$INPUT_URL"); fi
+          if [ -n "$INPUT_URLS" ]; then
+            while IFS= read -r line; do
+              line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+              [ -n "$line" ] && ARGS+=(--url "$line")
+            done <<< "$INPUT_URLS"
+          fi
+          echo "מריץ הורדה עם ${#ARGS[@]} ארגומנטים"
           python scripts/download.py "${ARGS[@]}"
 
   cleanup:

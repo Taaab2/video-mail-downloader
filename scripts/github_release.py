@@ -80,7 +80,7 @@ class ReleaseUploader:
         asset_name = self._safe_asset_name(asset_name or path.name)
         params = {"name": asset_name}
         if label:
-            params["label"] = label[:200]
+            params["label"] = self._safe_label(label)
         upload_url = release["upload_url"].split("{")[0]
         with path.open("rb") as fh:
             resp = self.session.post(
@@ -109,6 +109,16 @@ class ReleaseUploader:
         ascii_stem = re.sub(r"[^A-Za-z0-9._-]+", ".", ascii_stem)
         ascii_stem = re.sub(r"\.{2,}", ".", ascii_stem).strip("._- ")
         return (ascii_stem[: 180 - len(suffix)] or "video") + suffix
+
+    @staticmethod
+    def _safe_label(label: str) -> str:
+        """טקסט ה-label של האסימון: GitHub דוחה תווי 4-בייט (אימוג'י וכו')
+        בשדה הזה, ולכן מסירים אותם (שומרים עברית ויתר ה-BMP)."""
+        cleaned = "".join(
+            ch for ch in label if ord(ch) <= 0xFFFF and (ch.isprintable() or ch == " ")
+        )
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+        return cleaned[:200] or "קובץ"
 
     @staticmethod
     def direct_url(repo: str, tag: str, asset_name: str) -> str:
